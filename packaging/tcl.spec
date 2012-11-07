@@ -9,8 +9,6 @@ Source0:        %{name}%{version}-src.tar.gz
 Source1:        tcl-rpmlintrc
 Source2:        baselibs.conf
 Source3:        macros.tcl
-Patch0:         tcl.patch
-Patch1:         tcl-unload.patch
 BuildRequires:  autoconf
 Requires(pre):  /usr/bin/rm
 Provides:       tclsh
