@@ -316,10 +316,7 @@ proc ::tcl::tm::Defaults {} {
 
     # Note that we're using [::list], not [list] because [list] means
     # something other than [::list] in this namespace.
-    roots [::list \
-	    [file dirname [info library]] \
-	    [file join [file dirname [file dirname $exe]] lib] \
-	    ]
+    roots [lreverse $::tcl_pkgPath]
 
     if {$tcl_platform(platform) eq "windows"} {
 	set sep ";"
