@@ -42,8 +42,6 @@ the Tcl language itself.
 
 %prep
 %setup -q -n %{name}%{version}
-%patch0
-%patch1
 
 %build
 cd unix
