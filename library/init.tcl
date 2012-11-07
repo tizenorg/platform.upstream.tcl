@@ -52,11 +52,6 @@ namespace eval tcl {
 	    lappend ::auto_path $Dir
 	}
     }
-    set Dir [file join [file dirname [file dirname \
-	    [info nameofexecutable]]] lib]
-    if {$Dir ni $::auto_path} {
-	lappend ::auto_path $Dir
-    }
     catch {
 	foreach Dir $::tcl_pkgPath {
 	    if {$Dir ni $::auto_path} {
