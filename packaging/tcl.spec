@@ -9,6 +9,7 @@ Source0:        %{name}%{version}-src.tar.gz
 Source1:        tcl-rpmlintrc
 Source2:        baselibs.conf
 Source3:        macros.tcl
+Source1001: 	tcl.manifest
 BuildRequires:  autoconf
 Requires(pre):  /usr/bin/rm
 Provides:       tclsh
@@ -42,6 +43,7 @@ the Tcl language itself.
 
 %prep
 %setup -q -n %{name}%{version}
+cp %{SOURCE1001} .
 
 %build
 cd unix
@@ -90,6 +92,7 @@ mkdir -p %{buildroot}%{_datadir}/tcl
 install -D %{SOURCE3} -m 644 %{buildroot}%{_sysconfdir}/rpm/macros.tcl
 
 %files
+%manifest %{name}.manifest
 %defattr(-,root,root,755)
 %doc README  license.terms
 %doc %{_mandir}/man1/*
@@ -102,6 +105,7 @@ install -D %{SOURCE3} -m 644 %{buildroot}%{_sysconfdir}/rpm/macros.tcl
 %config %{_sysconfdir}/rpm/macros.tcl
 
 %files devel
+%manifest %{name}.manifest
 %defattr(-,root,root)
 %doc %{_mandir}/man3/*
 %{_includedir}/*
