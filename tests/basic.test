@@ -18,6 +18,9 @@
 package require tcltest 2
 namespace import -force ::tcltest::*
 
+::tcltest::loadTestedCommands
+catch [list package require -exact Tcltest [info patchlevel]]
+
 testConstraint testevalex [llength [info commands testevalex]]
 testConstraint testcmdtoken [llength [info commands testcmdtoken]]
 testConstraint testcreatecommand [llength [info commands testcreatecommand]]
@@ -628,8 +631,10 @@ test basic-46.5 {Tcl_AllowExceptions: exception return not allowed} -setup {
 "return -code return"
     (file "*BREAKtest" line 2)}
 
-test basic-47.1 {Tcl_EvalEx: check for missing close-bracket} -body {
-    subst {a[set b [format cd]}
+test basic-47.1 {Tcl_EvalEx: check for missing close-bracket} -constraints {
+    testevalex
+} -body {
+    testevalex {a[set b [format cd]}
 } -returnCodes error -result {missing close-bracket}
 
 # Some lists for expansion tests to work with

@@ -112,7 +112,7 @@ TclpGetClicks(void)
     if (tclGetTimeProcPtr != NativeGetTime) {
 	Tcl_Time time;
 
-	(*tclGetTimeProcPtr) (&time, tclTimeClientData);
+	tclGetTimeProcPtr(&time, tclTimeClientData);
 	now = time.sec*1000000 + time.usec;
     } else {
 	/*
@@ -125,7 +125,7 @@ TclpGetClicks(void)
 #else
     Tcl_Time time;
 
-    (*tclGetTimeProcPtr) (&time, tclTimeClientData);
+    tclGetTimeProcPtr(&time, tclTimeClientData);
     now = time.sec*1000000 + time.usec;
 #endif
 
@@ -134,7 +134,7 @@ TclpGetClicks(void)
 #ifdef TCL_WIDE_CLICKS
 
 /*
- *-----------------------------------------------------------------------------
+ *----------------------------------------------------------------------
  *
  * TclpGetWideClicks --
  *
@@ -149,7 +149,7 @@ TclpGetClicks(void)
  * Side effects:
  *	None.
  *
- *-----------------------------------------------------------------------------
+ *----------------------------------------------------------------------
  */
 
 Tcl_WideInt
@@ -160,7 +160,7 @@ TclpGetWideClicks(void)
     if (tclGetTimeProcPtr != NativeGetTime) {
 	Tcl_Time time;
 
-	(*tclGetTimeProcPtr) (&time, tclTimeClientData);
+	tclGetTimeProcPtr(&time, tclTimeClientData);
 	now = (Tcl_WideInt) (time.sec*1000000 + time.usec);
     } else {
 #ifdef MAC_OSX_TCL
@@ -174,7 +174,7 @@ TclpGetWideClicks(void)
 }
 
 /*
- *-----------------------------------------------------------------------------
+ *----------------------------------------------------------------------
  *
  * TclpWideClicksToNanoseconds --
  *
@@ -187,7 +187,7 @@ TclpGetWideClicks(void)
  * Side effects:
  *	None.
  *
- *-----------------------------------------------------------------------------
+ *----------------------------------------------------------------------
  */
 
 double
@@ -224,122 +224,6 @@ TclpWideClicksToNanoseconds(
 /*
  *----------------------------------------------------------------------
  *
- * TclpGetTimeZone --
- *
- *	Determines the current timezone. The method varies wildly between
- *	different platform implementations, so its hidden in this function.
- *
- * Results:
- *	The return value is the local time zone, measured in minutes away from
- *	GMT (-ve for east, +ve for west).
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-int
-TclpGetTimeZone(
-    unsigned long currentTime)
-{
-    int timeZone;
-
-    /*
-     * We prefer first to use the time zone in "struct tm" if the structure
-     * contains such a member. Following that, we try to locate the external
-     * 'timezone' variable and use its value. If both of those methods fail,
-     * we attempt to convert a known time to local time and use the difference
-     * from UTC as the local time zone. In all cases, we need to undo any
-     * Daylight Saving Time adjustment.
-     */
-
-#if defined(HAVE_TM_TZADJ)
-#define TCL_GOT_TIMEZONE
-    /*
-     * Struct tm contains tm_tzadj - that value may be used.
-     */
-
-    time_t curTime = (time_t) currentTime;
-    struct tm *timeDataPtr = TclpLocaltime(&curTime);
-
-    timeZone = timeDataPtr->tm_tzadj / 60;
-    if (timeDataPtr->tm_isdst) {
-	timeZone += 60;
-    }
-#endif
-
-#if defined(HAVE_TM_GMTOFF) && !defined (TCL_GOT_TIMEZONE)
-#define TCL_GOT_TIMEZONE
-    /*
-     * Struct tm contains tm_gmtoff - that value may be used.
-     */
-
-    time_t curTime = (time_t) currentTime;
-    struct tm *timeDataPtr = TclpLocaltime(&curTime);
-
-    timeZone = -(timeDataPtr->tm_gmtoff / 60);
-    if (timeDataPtr->tm_isdst) {
-	timeZone += 60;
-    }
-#endif
-
-#if defined(HAVE_TIMEZONE_VAR) && !defined(TCL_GOT_TIMEZONE) && !defined(USE_DELTA_FOR_TZ)
-#define TCL_GOT_TIMEZONE
-    /*
-     * The 'timezone' external var is present and may be used.
-     */
-
-    SetTZIfNecessary();
-
-    /*
-     * Note: this is not a typo in "timezone" below! See tzset documentation
-     * for details.
-     */
-
-    timeZone = timezone / 60;
-#endif
-
-#if !defined(TCL_GOT_TIMEZONE)
-#define TCL_GOT_TIMEZONE
-    /*
-     * Fallback - determine time zone with a known reference time.
-     */
-
-    time_t tt;
-    struct tm *stm;
-
-    tt = 849268800L;		/* 1996-11-29 12:00:00  GMT */
-    stm = TclpLocaltime(&tt);	/* eg 1996-11-29  6:00:00  CST6CDT */
-
-    /*
-     * The calculation below assumes a max of +12 or -12 hours from GMT.
-     */
-
-    timeZone = (12 - stm->tm_hour)*60 + (0 - stm->tm_min);
-    if (stm->tm_isdst) {
-	timeZone += 60;
-    }
-
-    /*
-     * Now have offset for our known reference time, eg +360 for CST6CDT.
-     */
-#endif
-
-#ifndef TCL_GOT_TIMEZONE
-    /*
-     * Cause fatal compile error, we don't know how to get timezone.
-     */
-
-#error autoconf did not figure out how to determine the timezone.
-#endif
-
-    return timeZone;
-}
-
-/*
- *----------------------------------------------------------------------
- *
  * Tcl_GetTime --
  *
  *	Gets the current system time in seconds and microseconds since the
@@ -361,7 +245,7 @@ void
 Tcl_GetTime(
     Tcl_Time *timePtr)		/* Location to store time information. */
 {
-    (*tclGetTimeProcPtr) (timePtr, tclTimeClientData);
+    tclGetTimeProcPtr(timePtr, tclTimeClientData);
 }
 
 /*
@@ -384,7 +268,7 @@ Tcl_GetTime(
 
 struct tm *
 TclpGetDate(
-    CONST time_t *time,
+    const time_t *time,
     int useGMT)
 {
     if (useGMT) {
@@ -412,7 +296,7 @@ TclpGetDate(
 
 struct tm *
 TclpGmtime(
-    CONST time_t *timePtr)	/* Pointer to the number of seconds since the
+    const time_t *timePtr)	/* Pointer to the number of seconds since the
 				 * local system's epoch */
 {
     /*
@@ -422,14 +306,14 @@ TclpGmtime(
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&tmKey);
 
 #ifdef HAVE_GMTIME_R
-    gmtime_r(timePtr, &(tsdPtr->gmtime_buf));
+    gmtime_r(timePtr, &tsdPtr->gmtime_buf);
 #else
     Tcl_MutexLock(&tmMutex);
-    memcpy(&(tsdPtr->gmtime_buf), gmtime(timePtr), sizeof(struct tm));
+    memcpy(&tsdPtr->gmtime_buf, gmtime(timePtr), sizeof(struct tm));
     Tcl_MutexUnlock(&tmMutex);
 #endif
 
-    return &(tsdPtr->gmtime_buf);
+    return &tsdPtr->gmtime_buf;
 }
 
 /*
@@ -451,7 +335,7 @@ TclpGmtime(
 
 struct tm *
 TclpLocaltime(
-    CONST time_t *timePtr)	/* Pointer to the number of seconds since the
+    const time_t *timePtr)	/* Pointer to the number of seconds since the
 				 * local system's epoch */
 {
     /*
@@ -462,14 +346,14 @@ TclpLocaltime(
 
     SetTZIfNecessary();
 #ifdef HAVE_LOCALTIME_R
-    localtime_r(timePtr, &(tsdPtr->localtime_buf));
+    localtime_r(timePtr, &tsdPtr->localtime_buf);
 #else
     Tcl_MutexLock(&tmMutex);
-    memcpy(&(tsdPtr->localtime_buf), localtime(timePtr), sizeof(struct tm));
+    memcpy(&tsdPtr->localtime_buf, localtime(timePtr), sizeof(struct tm));
     Tcl_MutexUnlock(&tmMutex);
 #endif
 
-    return &(tsdPtr->localtime_buf);
+    return &tsdPtr->localtime_buf;
 }
 
 /*
@@ -608,7 +492,7 @@ NativeGetTime(
 static void
 SetTZIfNecessary(void)
 {
-    CONST char *newTZ = getenv("TZ");
+    const char *newTZ = getenv("TZ");
 
     Tcl_MutexLock(&tmMutex);
     if (newTZ == NULL) {
@@ -617,7 +501,7 @@ SetTZIfNecessary(void)
     if (lastTZ == NULL || strcmp(lastTZ, newTZ)) {
 	tzset();
 	if (lastTZ == NULL) {
-	    Tcl_CreateExitHandler(CleanupMemory, (ClientData) NULL);
+	    Tcl_CreateExitHandler(CleanupMemory, NULL);
 	} else {
 	    Tcl_Free(lastTZ);
 	}

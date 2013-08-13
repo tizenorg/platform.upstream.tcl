@@ -14,9 +14,8 @@
 
 #include "tclInt.h"
 #include "tommath.h"
-#include <limits.h>
 
-extern TclTomMathStubs tclTomMathStubs;
+MODULE_SCOPE const TclTomMathStubs tclTomMathStubs;
 
 /*
  *----------------------------------------------------------------------
@@ -38,12 +37,12 @@ extern TclTomMathStubs tclTomMathStubs;
 
 int
 TclTommath_Init(
-    Tcl_Interp* interp		/* Tcl interpreter */
-) {
+    Tcl_Interp *interp)		/* Tcl interpreter */
+{
     /* TIP #268: Full patchlevel instead of just major.minor */
 
     if (Tcl_PkgProvideEx(interp, "tcl::tommath", TCL_PATCH_LEVEL,
-			 (ClientData)&tclTomMathStubs) != TCL_OK) {
+	    &tclTomMathStubs) != TCL_OK) {
 	return TCL_ERROR;
     }
     return TCL_OK;
@@ -189,7 +188,7 @@ TclBNInitBignumFromLong(
 {
     int status;
     unsigned long v;
-    mp_digit* p;
+    mp_digit *p;
 
     /*
      * Allocate enough memory to hold the largest possible long

@@ -79,7 +79,7 @@ static void lexnest(struct vars *, const chr *, const chr *);
 static void lexword(struct vars *);
 static int next(struct vars *);
 static int lexescape(struct vars *);
-static chr lexdigits(struct vars *, int, int, int);
+static int lexdigits(struct vars *, int, int, int);
 static int brenext(struct vars *, pchr);
 static void skip(struct vars *);
 static chr newline(NOPARMS);
@@ -131,7 +131,7 @@ static void cloneouts(struct nfa *, struct state *, struct state *, struct state
 static void delsub(struct nfa *, struct state *, struct state *);
 static void deltraverse(struct nfa *, struct state *, struct state *);
 static void dupnfa(struct nfa *, struct state *, struct state *, struct state *, struct state *);
-static void duptraverse(struct nfa *, struct state *, struct state *);
+static void duptraverse(struct nfa *, struct state *, struct state *, int);
 static void cleartraverse(struct nfa *, struct state *);
 static void specialcolors(struct nfa *);
 static long optimize(struct nfa *, FILE *);
@@ -1458,7 +1458,7 @@ brackpart(
     celt startc, endc;
     struct cvec *cv;
     const chr *startp, *endp;
-    chr c[1];
+    chr c;
 
     /*
      * Parse something, get rid of special cases, take shortcuts.
@@ -1470,7 +1470,7 @@ brackpart(
 	return;
 	break;
     case PLAIN:
-	c[0] = v->nextvalue;
+	c = v->nextvalue;
 	NEXT();
 
 	/*
@@ -1478,10 +1478,10 @@ brackpart(
 	 */
 
 	if (!SEE(RANGE)) {
-	    onechr(v, c[0], lp, rp);
+	    onechr(v, c, lp, rp);
 	    return;
 	}
-	startc = element(v, c, c+1);
+	startc = element(v, &c, &c+1);
 	NOERR();
 	break;
     case COLLEL:
@@ -1525,9 +1525,9 @@ brackpart(
 	switch (v->nexttype) {
 	case PLAIN:
 	case RANGE:
-	    c[0] = v->nextvalue;
+	    c = v->nextvalue;
 	    NEXT();
-	    endc = element(v, c, c+1);
+	    endc = element(v, &c, &c+1);
 	    NOERR();
 	    break;
 	case COLLEL:

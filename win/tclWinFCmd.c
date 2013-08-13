@@ -50,16 +50,16 @@ enum {
     WIN_SYSTEM_ATTRIBUTE
 };
 
-static int attributeArray[] = {FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_HIDDEN,
+static const int attributeArray[] = {FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_HIDDEN,
 	0, FILE_ATTRIBUTE_READONLY, 0, FILE_ATTRIBUTE_SYSTEM};
 
 
-CONST char *tclpFileAttrStrings[] = {
+const char *const tclpFileAttrStrings[] = {
 	"-archive", "-hidden", "-longname", "-readonly",
 	"-shortname", "-system", (char *) NULL
 };
 
-CONST TclFileAttrProcs tclpFileAttrProcs[] = {
+const TclFileAttrProcs tclpFileAttrProcs[] = {
 	{GetWinFileAttributes, SetWinFileAttributes},
 	{GetWinFileAttributes, SetWinFileAttributes},
 	{GetWinFileLongName, CannotSetAttribute},
@@ -90,7 +90,7 @@ typedef struct EXCEPTION_REGISTRATION {
  * Prototype for the TraverseWinTree callback function.
  */
 
-typedef int (TraversalProc)(CONST TCHAR *srcPtr, CONST TCHAR *dstPtr,
+typedef int (TraversalProc)(const TCHAR *srcPtr, const TCHAR *dstPtr,
 	int type, Tcl_DString *errorPtr);
 
 /*
@@ -101,18 +101,18 @@ static void		StatError(Tcl_Interp *interp, Tcl_Obj *fileName);
 static int		ConvertFileNameFormat(Tcl_Interp *interp,
 			    int objIndex, Tcl_Obj *fileName, int longShort,
 			    Tcl_Obj **attributePtrPtr);
-static int		DoCopyFile(CONST TCHAR *srcPtr, CONST TCHAR *dstPtr);
-static int		DoCreateDirectory(CONST TCHAR *pathPtr);
-static int		DoRemoveJustDirectory(CONST TCHAR *nativeSrc,
+static int		DoCopyFile(const TCHAR *srcPtr, const TCHAR *dstPtr);
+static int		DoCreateDirectory(const TCHAR *pathPtr);
+static int		DoRemoveJustDirectory(const TCHAR *nativeSrc,
 			    int ignoreError, Tcl_DString *errorPtr);
 static int		DoRemoveDirectory(Tcl_DString *pathPtr, int recursive,
 			    Tcl_DString *errorPtr);
-static int		DoRenameFile(CONST TCHAR *nativeSrc,
-			    CONST TCHAR *dstPtr);
-static int		TraversalCopy(CONST TCHAR *srcPtr, CONST TCHAR *dstPtr,
+static int		DoRenameFile(const TCHAR *nativeSrc,
+			    const TCHAR *dstPtr);
+static int		TraversalCopy(const TCHAR *srcPtr, const TCHAR *dstPtr,
 			    int type, Tcl_DString *errorPtr);
-static int		TraversalDelete(CONST TCHAR *srcPtr,
-			    CONST TCHAR *dstPtr, int type,
+static int		TraversalDelete(const TCHAR *srcPtr,
+			    const TCHAR *dstPtr, int type,
 			    Tcl_DString *errorPtr);
 static int		TraverseWinTree(TraversalProc *traverseProc,
 			    Tcl_DString *sourcePtr, Tcl_DString *dstPtr,
@@ -170,9 +170,9 @@ TclpObjRenameFile(
 
 static int
 DoRenameFile(
-    CONST TCHAR *nativeSrc,	/* Pathname of file or dir to be renamed
+    const TCHAR *nativeSrc,	/* Pathname of file or dir to be renamed
 				 * (native). */
-    CONST TCHAR *nativeDst)	/* New pathname for file or directory
+    const TCHAR *nativeDst)	/* New pathname for file or directory
 				 * (native). */
 {
 #if defined(HAVE_NO_SEH) && !defined(_WIN64)
@@ -275,7 +275,7 @@ DoRenameFile(
 	[registration]	"m"	(registration),
 	[nativeDst]	"m"	(nativeDst),
 	[nativeSrc]	"m"	(nativeSrc),
-	[moveFile]	"r"	(tclWinProcs->moveFileProc)
+	[moveFile]	"r"	(MoveFile)
 	:
 	"%eax", "%ebx", "%ecx", "%edx", "memory"
 	);
@@ -286,7 +286,7 @@ DoRenameFile(
 #ifndef HAVE_NO_SEH
     __try {
 #endif
-	if ((*tclWinProcs->moveFileProc)(nativeSrc, nativeDst) != FALSE) {
+	if ((*MoveFile)(nativeSrc, nativeDst) != FALSE) {
 	    retval = TCL_OK;
 	}
 #ifndef HAVE_NO_SEH
@@ -300,10 +300,10 @@ DoRenameFile(
 
     TclWinConvertError(GetLastError());
 
-    srcAttr = (*tclWinProcs->getFileAttributesProc)(nativeSrc);
-    dstAttr = (*tclWinProcs->getFileAttributesProc)(nativeDst);
+    srcAttr = GetFileAttributes(nativeSrc);
+    dstAttr = GetFileAttributes(nativeDst);
     if (srcAttr == 0xffffffff) {
-	if ((*tclWinProcs->getFullPathNameProc)(nativeSrc, 0, NULL,
+	if (GetFullPathName(nativeSrc, 0, NULL,
 		NULL) >= MAX_PATH) {
 	    errno = ENAMETOOLONG;
 	    return TCL_ERROR;
@@ -311,7 +311,7 @@ DoRenameFile(
 	srcAttr = 0;
     }
     if (dstAttr == 0xffffffff) {
-	if ((*tclWinProcs->getFullPathNameProc)(nativeDst, 0, NULL,
+	if (GetFullPathName(nativeDst, 0, NULL,
 		NULL) >= MAX_PATH) {
 	    errno = ENAMETOOLONG;
 	    return TCL_ERROR;
@@ -327,28 +327,28 @@ DoRenameFile(
     decode:
 	if (srcAttr & FILE_ATTRIBUTE_DIRECTORY) {
 	    TCHAR *nativeSrcRest, *nativeDstRest;
-	    CONST char **srcArgv, **dstArgv;
+	    const char **srcArgv, **dstArgv;
 	    int size, srcArgc, dstArgc;
-	    WCHAR nativeSrcPath[MAX_PATH];
-	    WCHAR nativeDstPath[MAX_PATH];
+	    TCHAR nativeSrcPath[MAX_PATH];
+	    TCHAR nativeDstPath[MAX_PATH];
 	    Tcl_DString srcString, dstString;
-	    CONST char *src, *dst;
+	    const char *src, *dst;
 
-	    size = (*tclWinProcs->getFullPathNameProc)(nativeSrc, MAX_PATH,
+	    size = GetFullPathName(nativeSrc, MAX_PATH,
 		    nativeSrcPath, &nativeSrcRest);
 	    if ((size == 0) || (size > MAX_PATH)) {
 		return TCL_ERROR;
 	    }
-	    size = (*tclWinProcs->getFullPathNameProc)(nativeDst, MAX_PATH,
+	    size = GetFullPathName(nativeDst, MAX_PATH,
 		    nativeDstPath, &nativeDstRest);
 	    if ((size == 0) || (size > MAX_PATH)) {
 		return TCL_ERROR;
 	    }
-	    (*tclWinProcs->charLowerProc)((TCHAR *) nativeSrcPath);
-	    (*tclWinProcs->charLowerProc)((TCHAR *) nativeDstPath);
+	    CharLower(nativeSrcPath);
+	    CharLower(nativeDstPath);
 
-	    src = Tcl_WinTCharToUtf((TCHAR *) nativeSrcPath, -1, &srcString);
-	    dst = Tcl_WinTCharToUtf((TCHAR *) nativeDstPath, -1, &dstString);
+	    src = Tcl_WinTCharToUtf(nativeSrcPath, -1, &srcString);
+	    dst = Tcl_WinTCharToUtf(nativeDstPath, -1, &dstString);
 
 	    /*
 	     * Check whether the destination path is actually inside the
@@ -395,8 +395,8 @@ DoRenameFile(
 		Tcl_SetErrno(EXDEV);
 	    }
 
-	    ckfree((char *) srcArgv);
-	    ckfree((char *) dstArgv);
+	    ckfree(srcArgv);
+	    ckfree(dstArgv);
 	}
 
 	/*
@@ -427,7 +427,7 @@ DoRenameFile(
 		     * directory back, for completeness.
 		     */
 
-		    if ((*tclWinProcs->moveFileProc)(nativeSrc,
+		    if (MoveFile(nativeSrc,
 			    nativeDst) != FALSE) {
 			return TCL_OK;
 		    }
@@ -438,8 +438,8 @@ DoRenameFile(
 		     */
 
 		    TclWinConvertError(GetLastError());
-		    (*tclWinProcs->createDirectoryProc)(nativeDst, NULL);
-		    (*tclWinProcs->setFileAttributesProc)(nativeDst, dstAttr);
+		    CreateDirectory(nativeDst, NULL);
+		    SetFileAttributes(nativeDst, dstAttr);
 		    if (Tcl_GetErrno() == EACCES) {
 			/*
 			 * Decode the EACCES to a more meaningful error.
@@ -466,22 +466,20 @@ DoRenameFile(
 
 		TCHAR *nativeRest, *nativeTmp, *nativePrefix;
 		int result, size;
-		WCHAR tempBuf[MAX_PATH];
+		TCHAR tempBuf[MAX_PATH];
 
-		size = (*tclWinProcs->getFullPathNameProc)(nativeDst, MAX_PATH,
+		size = GetFullPathName(nativeDst, MAX_PATH,
 			tempBuf, &nativeRest);
 		if ((size == 0) || (size > MAX_PATH) || (nativeRest == NULL)) {
 		    return TCL_ERROR;
 		}
 		nativeTmp = (TCHAR *) tempBuf;
-		((char *) nativeRest)[0] = '\0';
-		((char *) nativeRest)[1] = '\0';    /* In case it's Unicode. */
+		nativeRest[0] = L'\0';
 
 		result = TCL_ERROR;
-		nativePrefix = (tclWinProcs->useWide)
-			? (TCHAR *) L"tclr" : (TCHAR *) "tclr";
-		if ((*tclWinProcs->getTempFileNameProc)(nativeTmp,
-			nativePrefix, 0, tempBuf) != 0) {
+		nativePrefix = (TCHAR *) L"tclr";
+		if (GetTempFileName(nativeTmp, nativePrefix,
+			0, tempBuf) != 0) {
 		    /*
 		     * Strictly speaking, need the following DeleteFile and
 		     * MoveFile to be joined as an atomic operation so no
@@ -489,19 +487,16 @@ DoRenameFile(
 		     * same temp file.
 		     */
 
-		    nativeTmp = (TCHAR *) tempBuf;
-		    (*tclWinProcs->deleteFileProc)(nativeTmp);
-		    if ((*tclWinProcs->moveFileProc)(nativeDst,
-			    nativeTmp) != FALSE) {
-			if ((*tclWinProcs->moveFileProc)(nativeSrc,
-				nativeDst) != FALSE) {
-			    (*tclWinProcs->setFileAttributesProc)(nativeTmp,
-				    FILE_ATTRIBUTE_NORMAL);
-			    (*tclWinProcs->deleteFileProc)(nativeTmp);
+		    nativeTmp = tempBuf;
+		    DeleteFile(nativeTmp);
+		    if (MoveFile(nativeDst, nativeTmp) != FALSE) {
+			if (MoveFile(nativeSrc, nativeDst) != FALSE) {
+			    SetFileAttributes(nativeTmp, FILE_ATTRIBUTE_NORMAL);
+			    DeleteFile(nativeTmp);
 			    return TCL_OK;
 			} else {
-			    (*tclWinProcs->deleteFileProc)(nativeDst);
-			    (*tclWinProcs->moveFileProc)(nativeTmp, nativeDst);
+			    DeleteFile(nativeDst);
+			    MoveFile(nativeTmp, nativeDst);
 			}
 		    }
 
@@ -564,8 +559,8 @@ TclpObjCopyFile(
 
 static int
 DoCopyFile(
-    CONST TCHAR *nativeSrc,	/* Pathname of file to be copied (native). */
-    CONST TCHAR *nativeDst)	/* Pathname of file to copy to (native). */
+    const TCHAR *nativeSrc,	/* Pathname of file to be copied (native). */
+    const TCHAR *nativeDst)	/* Pathname of file to copy to (native). */
 {
 #if defined(HAVE_NO_SEH) && !defined(_WIN64)
     EXCEPTION_REGISTRATION registration;
@@ -668,7 +663,7 @@ DoCopyFile(
 	[registration]	"m"	(registration),
 	[nativeDst]	"m"	(nativeDst),
 	[nativeSrc]	"m"	(nativeSrc),
-	[copyFile]	"r"	(tclWinProcs->copyFileProc)
+	[copyFile]	"r"	(CopyFile)
 	:
 	"%eax", "%ebx", "%ecx", "%edx", "memory"
 	);
@@ -679,7 +674,7 @@ DoCopyFile(
 #ifndef HAVE_NO_SEH
     __try {
 #endif
-	if ((*tclWinProcs->copyFileProc)(nativeSrc, nativeDst, 0) != FALSE) {
+	if (CopyFile(nativeSrc, nativeDst, 0) != FALSE) {
 	    retval = TCL_OK;
 	}
 #ifndef HAVE_NO_SEH
@@ -699,8 +694,8 @@ DoCopyFile(
     if (Tcl_GetErrno() == EACCES) {
 	DWORD srcAttr, dstAttr;
 
-	srcAttr = (*tclWinProcs->getFileAttributesProc)(nativeSrc);
-	dstAttr = (*tclWinProcs->getFileAttributesProc)(nativeDst);
+	srcAttr = GetFileAttributes(nativeSrc);
+	dstAttr = GetFileAttributes(nativeDst);
 	if (srcAttr != 0xffffffff) {
 	    if (dstAttr == 0xffffffff) {
 		dstAttr = 0;
@@ -716,9 +711,9 @@ DoCopyFile(
 		Tcl_SetErrno(EISDIR);
 	    }
 	    if (dstAttr & FILE_ATTRIBUTE_READONLY) {
-		(*tclWinProcs->setFileAttributesProc)(nativeDst,
+		SetFileAttributes(nativeDst,
 			dstAttr & ~((DWORD)FILE_ATTRIBUTE_READONLY));
-		if ((*tclWinProcs->copyFileProc)(nativeSrc, nativeDst,
+		if (CopyFile(nativeSrc, nativeDst,
 			0) != FALSE) {
 		    return TCL_OK;
 		}
@@ -729,7 +724,7 @@ DoCopyFile(
 		 */
 
 		TclWinConvertError(GetLastError());
-		(*tclWinProcs->setFileAttributesProc)(nativeDst, dstAttr);
+		SetFileAttributes(nativeDst, dstAttr);
 	    }
 	}
     }
@@ -770,34 +765,35 @@ TclpObjDeleteFile(
 
 int
 TclpDeleteFile(
-    CONST TCHAR *nativePath)	/* Pathname of file to be removed (native). */
+    const void *nativePath)	/* Pathname of file to be removed (native). */
 {
     DWORD attr;
+    const TCHAR *path = nativePath;
 
     /*
      * The DeleteFile API acts differently under Win95/98 and NT WRT NULL and
      * "". Avoid passing these values.
      */
 
-    if (nativePath == NULL || nativePath[0] == '\0') {
+    if (path == NULL || path[0] == '\0') {
 	Tcl_SetErrno(ENOENT);
 	return TCL_ERROR;
     }
 
-    if ((*tclWinProcs->deleteFileProc)(nativePath) != FALSE) {
+    if (DeleteFile(path) != FALSE) {
 	return TCL_OK;
     }
     TclWinConvertError(GetLastError());
 
     if (Tcl_GetErrno() == EACCES) {
-	attr = (*tclWinProcs->getFileAttributesProc)(nativePath);
+	attr = GetFileAttributes(path);
 	if (attr != 0xffffffff) {
 	    if (attr & FILE_ATTRIBUTE_DIRECTORY) {
 		if (attr & FILE_ATTRIBUTE_REPARSE_POINT) {
 		    /*
 		     * It is a symbolic link - remove it.
 		     */
-		    if (TclWinSymLinkDelete(nativePath, 0) == 0) {
+		    if (TclWinSymLinkDelete(path, 0) == 0) {
 			return TCL_OK;
 		    }
 		}
@@ -811,21 +807,21 @@ TclpDeleteFile(
 
 		Tcl_SetErrno(EISDIR);
 	    } else if (attr & FILE_ATTRIBUTE_READONLY) {
-		int res = (*tclWinProcs->setFileAttributesProc)(nativePath,
-			attr & ~((DWORD)FILE_ATTRIBUTE_READONLY));
+		int res = SetFileAttributes(path,
+			attr & ~((DWORD) FILE_ATTRIBUTE_READONLY));
 
-		if ((res != 0) && ((*tclWinProcs->deleteFileProc)(nativePath)
-			!= FALSE)) {
+		if ((res != 0) &&
+			(DeleteFile(path) != FALSE)) {
 		    return TCL_OK;
 		}
 		TclWinConvertError(GetLastError());
 		if (res != 0) {
-		    (*tclWinProcs->setFileAttributesProc)(nativePath, attr);
+		    SetFileAttributes(path, attr);
 		}
 	    }
 	}
     } else if (Tcl_GetErrno() == ENOENT) {
-	attr = (*tclWinProcs->getFileAttributesProc)(nativePath);
+	attr = GetFileAttributes(path);
 	if (attr != 0xffffffff) {
 	    if (attr & FILE_ATTRIBUTE_DIRECTORY) {
 		/*
@@ -882,11 +878,11 @@ TclpObjCreateDirectory(
 
 static int
 DoCreateDirectory(
-    CONST TCHAR *nativePath)	/* Pathname of directory to create (native). */
+    const TCHAR *nativePath)	/* Pathname of directory to create (native). */
 {
-    DWORD error;
-    if ((*tclWinProcs->createDirectoryProc)(nativePath, NULL) == 0) {
-	error = GetLastError();
+    if (CreateDirectory(nativePath, NULL) == 0) {
+	DWORD error = GetLastError();
+
 	TclWinConvertError(error);
 	return TCL_ERROR;
     }
@@ -1015,13 +1011,12 @@ TclpObjRemoveDirectory(
     }
 
     if (ret != TCL_OK) {
-	int len = Tcl_DStringLength(&ds);
-	if (len > 0) {
+	if (Tcl_DStringLength(&ds) > 0) {
 	    if (normPtr != NULL &&
 		    !strcmp(Tcl_DStringValue(&ds), TclGetString(normPtr))) {
 		*errorPtr = pathPtr;
 	    } else {
-		*errorPtr = Tcl_NewStringObj(Tcl_DStringValue(&ds), -1);
+		*errorPtr = TclDStringToObj(&ds);
 	    }
 	    Tcl_IncrRefCount(*errorPtr);
 	}
@@ -1033,7 +1028,7 @@ TclpObjRemoveDirectory(
 
 static int
 DoRemoveJustDirectory(
-    CONST TCHAR *nativePath,	/* Pathname of directory to be removed
+    const TCHAR *nativePath,	/* Pathname of directory to be removed
 				 * (native). */
     int ignoreError,		/* If non-zero, don't initialize the errorPtr
 				 * under some circumstances on return. */
@@ -1053,7 +1048,7 @@ DoRemoveJustDirectory(
 	goto end;
     }
 
-    attr = (*tclWinProcs->getFileAttributesProc)(nativePath);
+    attr = GetFileAttributes(nativePath);
 
     if (attr & FILE_ATTRIBUTE_REPARSE_POINT) {
 	/*
@@ -1067,7 +1062,7 @@ DoRemoveJustDirectory(
 	 * Ordinary directory.
 	 */
 
-	if ((*tclWinProcs->removeDirectoryProc)(nativePath) != FALSE) {
+	if (RemoveDirectory(nativePath) != FALSE) {
 	    return TCL_OK;
 	}
     }
@@ -1075,7 +1070,7 @@ DoRemoveJustDirectory(
     TclWinConvertError(GetLastError());
 
     if (Tcl_GetErrno() == EACCES) {
-	attr = (*tclWinProcs->getFileAttributesProc)(nativePath);
+	attr = GetFileAttributes(nativePath);
 	if (attr != 0xffffffff) {
 	    if ((attr & FILE_ATTRIBUTE_DIRECTORY) == 0) {
 		/*
@@ -1099,40 +1094,40 @@ DoRemoveJustDirectory(
 
 	    if (attr & FILE_ATTRIBUTE_READONLY) {
 		attr &= ~FILE_ATTRIBUTE_READONLY;
-		if ((*tclWinProcs->setFileAttributesProc)(nativePath,
+		if (SetFileAttributes(nativePath,
 			attr) == FALSE) {
 		    goto end;
 		}
-		if ((*tclWinProcs->removeDirectoryProc)(nativePath) != FALSE) {
+		if (RemoveDirectory(nativePath) != FALSE) {
 		    return TCL_OK;
 		}
 		TclWinConvertError(GetLastError());
-		(*tclWinProcs->setFileAttributesProc)(nativePath,
+		SetFileAttributes(nativePath,
 			attr | FILE_ATTRIBUTE_READONLY);
 	    }
 
 	    /*
-	     * Windows 95 and Win32s report removing a non-empty directory as
+	     * Windows 95 reports removing a non-empty directory as
 	     * EACCES, not EEXIST. If the directory is not empty, change errno
 	     * so caller knows what's going on.
 	     */
 
-	    if (TclWinGetPlatformId() != VER_PLATFORM_WIN32_NT) {
-		CONST char *path, *find;
+	    if (TclWinGetPlatformId() == VER_PLATFORM_WIN32_WINDOWS) {
+		const char *path, *find;
 		HANDLE handle;
 		WIN32_FIND_DATAA data;
 		Tcl_DString buffer;
 		int len;
 
-		path = (CONST char *) nativePath;
+		path = (const char *) nativePath;
 
 		Tcl_DStringInit(&buffer);
 		len = strlen(path);
 		find = Tcl_DStringAppend(&buffer, path, len);
 		if ((len > 0) && (find[len - 1] != '\\')) {
-		    Tcl_DStringAppend(&buffer, "\\", 1);
+		    TclDStringAppendLiteral(&buffer, "\\");
 		}
-		find = Tcl_DStringAppend(&buffer, "*.*", 3);
+		find = TclDStringAppendLiteral(&buffer, "*.*");
 		handle = FindFirstFileA(find, &data);
 		if (handle != INVALID_HANDLE_VALUE) {
 		    while (1) {
@@ -1192,7 +1187,7 @@ DoRemoveDirectory(
 				 * filled with UTF-8 name of file causing
 				 * error. */
 {
-    int res = DoRemoveJustDirectory(Tcl_DStringValue(pathPtr), recursive,
+    int res = DoRemoveJustDirectory((const TCHAR *)Tcl_DStringValue(pathPtr), recursive,
 	    errorPtr);
 
     if ((res == TCL_ERROR) && (recursive != 0) && (Tcl_GetErrno() == EEXIST)) {
@@ -1246,7 +1241,7 @@ TraverseWinTree(
     TCHAR *nativeSource, *nativeTarget, *nativeErrfile;
     int result, found, sourceLen, targetLen = 0, oldSourceLen, oldTargetLen;
     HANDLE handle;
-    WIN32_FIND_DATAT data;
+    WIN32_FIND_DATA data;
 
     nativeErrfile = NULL;
     result = TCL_OK;
@@ -1257,7 +1252,7 @@ TraverseWinTree(
 	    (targetPtr == NULL ? NULL : Tcl_DStringValue(targetPtr));
 
     oldSourceLen = Tcl_DStringLength(sourcePtr);
-    sourceAttr = (*tclWinProcs->getFileAttributesProc)(nativeSource);
+    sourceAttr = GetFileAttributes(nativeSource);
     if (sourceAttr == 0xffffffff) {
 	nativeErrfile = nativeSource;
 	goto end;
@@ -1268,7 +1263,7 @@ TraverseWinTree(
 	 * Process the symbolic link
 	 */
 
-	return (*traverseProc)(nativeSource, nativeTarget, DOTREE_LINK,
+	return traverseProc(nativeSource, nativeTarget, DOTREE_LINK,
 		errorPtr);
     }
 
@@ -1277,18 +1272,14 @@ TraverseWinTree(
 	 * Process the regular file
 	 */
 
-	return (*traverseProc)(nativeSource, nativeTarget, DOTREE_F, errorPtr);
+	return traverseProc(nativeSource, nativeTarget, DOTREE_F, errorPtr);
     }
 
-    if (tclWinProcs->useWide) {
-	Tcl_DStringAppend(sourcePtr, (char *) L"\\*.*", 4 * sizeof(WCHAR) + 1);
-	Tcl_DStringSetLength(sourcePtr, Tcl_DStringLength(sourcePtr) - 1);
-    } else {
-	Tcl_DStringAppend(sourcePtr, "\\*.*", 4);
-    }
+    Tcl_DStringAppend(sourcePtr, (char *) TEXT("\\*.*"), 4 * sizeof(TCHAR) + 1);
+    Tcl_DStringSetLength(sourcePtr, Tcl_DStringLength(sourcePtr) - 1);
 
     nativeSource = (TCHAR *) Tcl_DStringValue(sourcePtr);
-    handle = (*tclWinProcs->findFirstFileProc)(nativeSource, &data);
+    handle = FindFirstFile(nativeSource, &data);
     if (handle == INVALID_HANDLE_VALUE) {
 	/*
 	 * Can't read directory.
@@ -1299,67 +1290,44 @@ TraverseWinTree(
 	goto end;
     }
 
-    nativeSource[oldSourceLen + 1] = '\0';
+    Tcl_DStringSetLength(sourcePtr, oldSourceLen + 1);
     Tcl_DStringSetLength(sourcePtr, oldSourceLen);
-    result = (*traverseProc)(nativeSource, nativeTarget, DOTREE_PRED,
+    result = traverseProc(nativeSource, nativeTarget, DOTREE_PRED,
 	    errorPtr);
     if (result != TCL_OK) {
 	FindClose(handle);
 	return result;
     }
 
-    sourceLen = oldSourceLen;
-
-    if (tclWinProcs->useWide) {
-	sourceLen += sizeof(WCHAR);
-	Tcl_DStringAppend(sourcePtr, (char *) L"\\", sizeof(WCHAR) + 1);
-	Tcl_DStringSetLength(sourcePtr, sourceLen);
-    } else {
-	sourceLen += 1;
-	Tcl_DStringAppend(sourcePtr, "\\", 1);
-    }
+    sourceLen = oldSourceLen + sizeof(TCHAR);
+    Tcl_DStringAppend(sourcePtr, (char *) TEXT("\\"), sizeof(TCHAR) + 1);
+    Tcl_DStringSetLength(sourcePtr, sourceLen);
     if (targetPtr != NULL) {
 	oldTargetLen = Tcl_DStringLength(targetPtr);
 
 	targetLen = oldTargetLen;
-	if (tclWinProcs->useWide) {
-	    targetLen += sizeof(WCHAR);
-	    Tcl_DStringAppend(targetPtr, (char *) L"\\", sizeof(WCHAR) + 1);
-	    Tcl_DStringSetLength(targetPtr, targetLen);
-	} else {
-	    targetLen += 1;
-	    Tcl_DStringAppend(targetPtr, "\\", 1);
-	}
+	targetLen += sizeof(TCHAR);
+	Tcl_DStringAppend(targetPtr, (char *) TEXT("\\"), sizeof(TCHAR) + 1);
+	Tcl_DStringSetLength(targetPtr, targetLen);
     }
 
     found = 1;
-    for (; found; found = (*tclWinProcs->findNextFileProc)(handle, &data)) {
+    for (; found; found = FindNextFile(handle, &data)) {
 	TCHAR *nativeName;
 	int len;
 
-	if (tclWinProcs->useWide) {
-	    WCHAR *wp;
-
-	    wp = data.w.cFileName;
+	TCHAR *wp = data.cFileName;
+	if (*wp == '.') {
+	    wp++;
 	    if (*wp == '.') {
 		wp++;
-		if (*wp == '.') {
-		    wp++;
-		}
-		if (*wp == '\0') {
-		    continue;
-		}
 	    }
-	    nativeName = (TCHAR *) data.w.cFileName;
-	    len = wcslen(data.w.cFileName) * sizeof(WCHAR);
-	} else {
-	    if ((strcmp(data.a.cFileName, ".") == 0)
-		    || (strcmp(data.a.cFileName, "..") == 0)) {
+	    if (*wp == '\0') {
 		continue;
 	    }
-	    nativeName = (TCHAR *) data.a.cFileName;
-	    len = strlen(data.a.cFileName);
 	}
+	nativeName = (TCHAR *) data.cFileName;
+	len = _tcslen(data.cFileName) * sizeof(TCHAR);
 
 	/*
 	 * Append name after slash, and recurse on the file.
@@ -1404,8 +1372,8 @@ TraverseWinTree(
 	 * files in that directory.
 	 */
 
-	result = (*traverseProc)(Tcl_DStringValue(sourcePtr),
-		(targetPtr == NULL ? NULL : Tcl_DStringValue(targetPtr)),
+	result = traverseProc((const TCHAR *)Tcl_DStringValue(sourcePtr),
+		(const TCHAR *)(targetPtr == NULL ? NULL : Tcl_DStringValue(targetPtr)),
 		DOTREE_POSTD, errorPtr);
     }
 
@@ -1440,8 +1408,8 @@ TraverseWinTree(
 
 static int
 TraversalCopy(
-    CONST TCHAR *nativeSrc,	/* Source pathname to copy. */
-    CONST TCHAR *nativeDst,	/* Destination pathname of copy. */
+    const TCHAR *nativeSrc,	/* Source pathname to copy. */
+    const TCHAR *nativeDst,	/* Destination pathname of copy. */
     int type,			/* Reason for call - see TraverseWinTree() */
     Tcl_DString *errorPtr)	/* If non-NULL, initialized DString filled
 				 * with UTF-8 name of file causing error. */
@@ -1459,9 +1427,9 @@ TraversalCopy(
 	break;
     case DOTREE_PRED:
 	if (DoCreateDirectory(nativeDst) == TCL_OK) {
-	    DWORD attr = (tclWinProcs->getFileAttributesProc)(nativeSrc);
+	    DWORD attr = GetFileAttributes(nativeSrc);
 
-	    if ((tclWinProcs->setFileAttributesProc)(nativeDst,
+	    if (SetFileAttributes(nativeDst,
 		    attr) != FALSE) {
 		return TCL_OK;
 	    }
@@ -1506,8 +1474,8 @@ TraversalCopy(
 
 static int
 TraversalDelete(
-    CONST TCHAR *nativeSrc,	/* Source pathname to delete. */
-    CONST TCHAR *dstPtr,	/* Not used. */
+    const TCHAR *nativeSrc,	/* Source pathname to delete. */
+    const TCHAR *dstPtr,	/* Not used. */
     int type,			/* Reason for call - see TraverseWinTree() */
     Tcl_DString *errorPtr)	/* If non-NULL, initialized DString filled
 				 * with UTF-8 name of file causing error. */
@@ -1562,8 +1530,8 @@ StatError(
 				 * error. */
 {
     TclWinConvertError(GetLastError());
-    Tcl_AppendResult(interp, "could not read \"", TclGetString(fileName),
-	    "\": ", Tcl_PosixError(interp), (char *) NULL);
+    Tcl_SetObjResult(interp, Tcl_ObjPrintf("could not read \"%s\": %s",
+	    TclGetString(fileName), Tcl_PosixError(interp)));
 }
 
 /*
@@ -1593,11 +1561,11 @@ GetWinFileAttributes(
     Tcl_Obj **attributePtrPtr)	/* A pointer to return the object with. */
 {
     DWORD result;
-    CONST TCHAR *nativeName;
+    const TCHAR *nativeName;
     int attr;
 
     nativeName = Tcl_FSGetNativePath(fileName);
-    result = (*tclWinProcs->getFileAttributesProc)(nativeName);
+    result = GetFileAttributes(nativeName);
 
     if (result == 0xffffffff) {
 	StatError(interp, fileName);
@@ -1615,7 +1583,7 @@ GetWinFileAttributes(
 	 */
 
 	int len;
-	char *str = Tcl_GetStringFromObj(fileName,&len);
+	const char *str = Tcl_GetStringFromObj(fileName,&len);
 
 	if (len < 4) {
 	    if (len == 0) {
@@ -1681,9 +1649,11 @@ ConvertFileNameFormat(
 
     if (splitPath == NULL || pathc == 0) {
 	if (interp != NULL) {
-	    Tcl_AppendResult(interp, "could not read \"",
-		    Tcl_GetString(fileName), "\": no such file or directory",
-		    (char *) NULL);
+	    Tcl_SetObjResult(interp, Tcl_ObjPrintf(
+		    "could not read \"%s\": no such file or directory",
+		    Tcl_GetString(fileName)));
+	    errno = ENOENT;
+	    Tcl_PosixError(interp);
 	}
 	goto cleanup;
     }
@@ -1724,10 +1694,10 @@ ConvertFileNameFormat(
 	    Tcl_Obj *tempPath;
 	    Tcl_DString ds;
 	    Tcl_DString dsTemp;
-	    TCHAR *nativeName;
-	    char *tempString;
+	    const TCHAR *nativeName;
+	    const char *tempString;
 	    int tempLen;
-	    WIN32_FIND_DATAT data;
+	    WIN32_FIND_DATA data;
 	    HANDLE handle;
 	    DWORD attr;
 
@@ -1743,7 +1713,7 @@ ConvertFileNameFormat(
 	    tempString = Tcl_GetStringFromObj(tempPath,&tempLen);
 	    nativeName = Tcl_WinUtfToTChar(tempString, tempLen, &ds);
 	    Tcl_DecrRefCount(tempPath);
-	    handle = (*tclWinProcs->findFirstFileProc)(nativeName, &data);
+	    handle = FindFirstFile(nativeName, &data);
 	    if (handle == INVALID_HANDLE_VALUE) {
 		/*
 		 * FindFirstFile() doesn't like root directories. We would
@@ -1752,7 +1722,7 @@ ConvertFileNameFormat(
 		 * root directory
 		 */
 
-		attr = (*tclWinProcs->getFileAttributesProc)(nativeName);
+		attr = GetFileAttributes(nativeName);
 		if ((attr!=0xFFFFFFFF) && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
 		    Tcl_DStringFree(&ds);
 		    goto simple;
@@ -1766,27 +1736,14 @@ ConvertFileNameFormat(
 		}
 		goto cleanup;
 	    }
-	    if (tclWinProcs->useWide) {
-		nativeName = (TCHAR *) data.w.cAlternateFileName;
-		if (longShort) {
-		    if (data.w.cFileName[0] != '\0') {
-			nativeName = (TCHAR *) data.w.cFileName;
-		    }
-		} else {
-		    if (data.w.cAlternateFileName[0] == '\0') {
-			nativeName = (TCHAR *) data.w.cFileName;
-		    }
+	    nativeName = data.cAlternateFileName;
+	    if (longShort) {
+		if (data.cFileName[0] != '\0') {
+		    nativeName = data.cFileName;
 		}
 	    } else {
-		nativeName = (TCHAR *) data.a.cAlternateFileName;
-		if (longShort) {
-		    if (data.a.cFileName[0] != '\0') {
-			nativeName = (TCHAR *) data.a.cFileName;
-		    }
-		} else {
-		    if (data.a.cAlternateFileName[0] == '\0') {
-			nativeName = (TCHAR *) data.a.cFileName;
-		    }
+		if (data.cAlternateFileName[0] == '\0') {
+		    nativeName = (TCHAR *) data.cFileName;
 		}
 	    }
 
@@ -1804,22 +1761,21 @@ ConvertFileNameFormat(
 
 	    Tcl_DStringInit(&dsTemp);
 	    Tcl_WinTCharToUtf(nativeName, -1, &dsTemp);
+	    Tcl_DStringFree(&ds);
 
 	    /*
 	     * Deal with issues of tildes being absolute.
 	     */
 
 	    if (Tcl_DStringValue(&dsTemp)[0] == '~') {
-		tempPath = Tcl_NewStringObj("./",2);
+		TclNewLiteralStringObj(tempPath, "./");
 		Tcl_AppendToObj(tempPath, Tcl_DStringValue(&dsTemp),
 			Tcl_DStringLength(&dsTemp));
+		Tcl_DStringFree(&dsTemp);
 	    } else {
-		tempPath = Tcl_NewStringObj(Tcl_DStringValue(&dsTemp),
-			Tcl_DStringLength(&dsTemp));
+		tempPath = TclDStringToObj(&dsTemp);
 	    }
 	    Tcl_ListObjReplace(NULL, splitPath, i, 1, 1, &tempPath);
-	    Tcl_DStringFree(&ds);
-	    Tcl_DStringFree(&dsTemp);
 	    FindClose(handle);
 	}
     }
@@ -1932,12 +1888,11 @@ SetWinFileAttributes(
     Tcl_Obj *attributePtr)	/* The new value of the attribute. */
 {
     DWORD fileAttributes;
-    int yesNo;
-    int result;
-    CONST TCHAR *nativeName;
+    int yesNo, result;
+    const TCHAR *nativeName;
 
     nativeName = Tcl_FSGetNativePath(fileName);
-    fileAttributes = (*tclWinProcs->getFileAttributesProc)(nativeName);
+    fileAttributes = GetFileAttributes(nativeName);
 
     if (fileAttributes == 0xffffffff) {
 	StatError(interp, fileName);
@@ -1955,7 +1910,7 @@ SetWinFileAttributes(
 	fileAttributes &= ~(attributeArray[objIndex]);
     }
 
-    if (!(*tclWinProcs->setFileAttributesProc)(nativeName, fileAttributes)) {
+    if (!SetFileAttributes(nativeName, fileAttributes)) {
 	StatError(interp, fileName);
 	return TCL_ERROR;
     }
@@ -1986,13 +1941,13 @@ CannotSetAttribute(
     Tcl_Obj *fileName,		/* The name of the file. */
     Tcl_Obj *attributePtr)	/* The new value of the attribute. */
 {
-    Tcl_AppendResult(interp, "cannot set attribute \"",
-	    tclpFileAttrStrings[objIndex], "\" for file \"",
-	    Tcl_GetString(fileName), "\": attribute is readonly",
-	    (char *) NULL);
+    Tcl_SetObjResult(interp, Tcl_ObjPrintf(
+	    "cannot set attribute \"%s\" for file \"%s\": attribute is readonly",
+	    tclpFileAttrStrings[objIndex], Tcl_GetString(fileName)));
+    errno = EINVAL;
+    Tcl_PosixError(interp);
     return TCL_ERROR;
 }
-
 
 /*
  *---------------------------------------------------------------------------
@@ -2010,7 +1965,7 @@ CannotSetAttribute(
  *---------------------------------------------------------------------------
  */
 
-Tcl_Obj*
+Tcl_Obj *
 TclpObjListVolumes(void)
 {
     Tcl_Obj *resultPtr, *elemPtr;

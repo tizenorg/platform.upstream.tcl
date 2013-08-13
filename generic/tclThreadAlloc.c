@@ -35,7 +35,9 @@
  */
 
 #define NOBJALLOC	800
-#define NOBJHIGH	1200
+
+/* Actual definition moved to tclInt.h */
+#define NOBJHIGH	ALLOC_NOBJHIGH
 
 /*
  * The following union stores accounting information for each block including
@@ -95,7 +97,9 @@ typedef struct Bucket {
 
 /*
  * The following structure defines a cache of buckets and objs, of which there
- * will be (at most) one per thread.
+ * will be (at most) one per thread. Any changes need to be reflected in the
+ * struct AllocCache defined in tclInt.h, possibly also in the initialisation
+ * code in Tcl_CreateInterp().
  */
 
 typedef struct Cache {
@@ -141,6 +145,26 @@ static Tcl_Mutex *objLockPtr;
 static Cache sharedCache;
 static Cache *sharedPtr = &sharedCache;
 static Cache *firstCachePtr = &sharedCache;
+
+#if defined(HAVE_FAST_TSD)
+static __thread Cache *tcachePtr;
+
+# define GETCACHE(cachePtr)			\
+    do {					\
+	if (!tcachePtr) {			\
+	    tcachePtr = GetCache();		\
+	}					\
+	(cachePtr) = tcachePtr;			\
+    } while (0)
+#else
+# define GETCACHE(cachePtr)			\
+    do {					\
+	(cachePtr) = TclpGetAllocCache();	\
+	if ((cachePtr) == NULL) {		\
+	    (cachePtr) = GetCache();		\
+	}					\
+    } while (0)
+#endif
 
 /*
  *----------------------------------------------------------------------
@@ -304,10 +328,7 @@ TclpAlloc(
     }
 #endif
 
-    cachePtr = TclpGetAllocCache();
-    if (cachePtr == NULL) {
-	cachePtr = GetCache();
-    }
+    GETCACHE(cachePtr);
 
     /*
      * Increment the requested size to include room for the Block structure.
@@ -319,7 +340,7 @@ TclpAlloc(
     blockPtr = NULL;
     size = reqSize + sizeof(Block);
 #if RCHECK
-    ++size;
+    size++;
 #endif
     if (size > MAXALLOC) {
 	bucket = NBUCKETS;
@@ -330,13 +351,13 @@ TclpAlloc(
     } else {
 	bucket = 0;
 	while (bucketInfo[bucket].blockSize < size) {
-	    ++bucket;
+	    bucket++;
 	}
 	if (cachePtr->buckets[bucket].numFree || GetBlocks(cachePtr, bucket)) {
 	    blockPtr = cachePtr->buckets[bucket].firstPtr;
 	    cachePtr->buckets[bucket].firstPtr = blockPtr->nextBlock;
-	    --cachePtr->buckets[bucket].numFree;
-	    ++cachePtr->buckets[bucket].numRemoves;
+	    cachePtr->buckets[bucket].numFree--;
+	    cachePtr->buckets[bucket].numRemoves++;
 	    cachePtr->buckets[bucket].totalAssigned += reqSize;
 	}
     }
@@ -374,10 +395,7 @@ TclpFree(
 	return;
     }
 
-    cachePtr = TclpGetAllocCache();
-    if (cachePtr == NULL) {
-	cachePtr = GetCache();
-    }
+    GETCACHE(cachePtr);
 
     /*
      * Get the block back from the user pointer and call system free directly
@@ -396,8 +414,8 @@ TclpFree(
     cachePtr->buckets[bucket].totalAssigned -= blockPtr->blockReqSize;
     blockPtr->nextBlock = cachePtr->buckets[bucket].firstPtr;
     cachePtr->buckets[bucket].firstPtr = blockPtr;
-    ++cachePtr->buckets[bucket].numFree;
-    ++cachePtr->buckets[bucket].numInserts;
+    cachePtr->buckets[bucket].numFree++;
+    cachePtr->buckets[bucket].numInserts++;
 
     if (cachePtr != sharedPtr &&
 	    cachePtr->buckets[bucket].numFree > bucketInfo[bucket].maxBlocks) {
@@ -449,10 +467,7 @@ TclpRealloc(
     }
 #endif
 
-    cachePtr = TclpGetAllocCache();
-    if (cachePtr == NULL) {
-	cachePtr = GetCache();
-    }
+    GETCACHE(cachePtr);
 
     /*
      * If the block is not a system block and fits in place, simply return the
@@ -463,7 +478,7 @@ TclpRealloc(
     blockPtr = Ptr2Block(ptr);
     size = reqSize + sizeof(Block);
 #if RCHECK
-    ++size;
+    size++;
 #endif
     bucket = blockPtr->sourceBucket;
     if (bucket != NBUCKETS) {
@@ -516,18 +531,20 @@ TclpRealloc(
  *	May move Tcl_Obj's from shared cached or allocate new Tcl_Obj's if
  *	list is empty.
  *
+ * Note:
+ *	If this code is updated, the changes need to be reflected in the macro
+ *	TclAllocObjStorageEx() defined in tclInt.h
+ *
  *----------------------------------------------------------------------
  */
 
 Tcl_Obj *
 TclThreadAllocObj(void)
 {
-    register Cache *cachePtr = TclpGetAllocCache();
+    register Cache *cachePtr;
     register Tcl_Obj *objPtr;
 
-    if (cachePtr == NULL) {
-	cachePtr = GetCache();
-    }
+    GETCACHE(cachePtr);
 
     /*
      * Get this thread's obj list structure and move or allocate new objs if
@@ -568,7 +585,7 @@ TclThreadAllocObj(void)
 
     objPtr = cachePtr->firstObjPtr;
     cachePtr->firstObjPtr = objPtr->internalRep.otherValuePtr;
-    --cachePtr->numObjects;
+    cachePtr->numObjects--;
     return objPtr;
 }
 
@@ -585,6 +602,10 @@ TclThreadAllocObj(void)
  * Side effects:
  *	May move free Tcl_Obj's to shared list upon hitting high water mark.
  *
+ * Note:
+ *	If this code is updated, the changes need to be reflected in the macro
+ *	TclAllocObjStorageEx() defined in tclInt.h
+ *
  *----------------------------------------------------------------------
  */
 
@@ -592,11 +613,9 @@ void
 TclThreadFreeObj(
     Tcl_Obj *objPtr)
 {
-    Cache *cachePtr = TclpGetAllocCache();
+    Cache *cachePtr;
 
-    if (cachePtr == NULL) {
-	cachePtr = GetCache();
-    }
+    GETCACHE(cachePtr);
 
     /*
      * Get this thread's list and push on the free Tcl_Obj.
@@ -604,7 +623,7 @@ TclThreadFreeObj(
 
     objPtr->internalRep.otherValuePtr = cachePtr->firstObjPtr;
     cachePtr->firstObjPtr = objPtr;
-    ++cachePtr->numObjects;
+    cachePtr->numObjects++;
 
     /*
      * If the number of free objects has exceeded the high water mark, move
@@ -793,17 +812,9 @@ LockBucket(
     Cache *cachePtr,
     int bucket)
 {
-#if 0
-    if (Tcl_MutexTryLock(bucketInfo[bucket].lockPtr) != TCL_OK) {
-	Tcl_MutexLock(bucketInfo[bucket].lockPtr);
-	++cachePtr->buckets[bucket].numWaits;
-	++sharedPtr->buckets[bucket].numWaits;
-    }
-#else
     Tcl_MutexLock(bucketInfo[bucket].lockPtr);
-#endif
-    ++cachePtr->buckets[bucket].numLocks;
-    ++sharedPtr->buckets[bucket].numLocks;
+    cachePtr->buckets[bucket].numLocks++;
+    sharedPtr->buckets[bucket].numLocks++;
 }
 
 static void
@@ -942,7 +953,7 @@ GetBlocks(
 		size = bucketInfo[n].blockSize;
 		blockPtr = cachePtr->buckets[n].firstPtr;
 		cachePtr->buckets[n].firstPtr = blockPtr->nextBlock;
-		--cachePtr->buckets[n].numFree;
+		cachePtr->buckets[n].numFree--;
 		break;
 	    }
 	}
@@ -999,8 +1010,8 @@ TclFinalizeThreadAlloc(void)
     unsigned int i;
 
     for (i = 0; i < NBUCKETS; ++i) {
-        TclpFreeAllocMutex(bucketInfo[i].lockPtr);
-        bucketInfo[i].lockPtr = NULL;
+	TclpFreeAllocMutex(bucketInfo[i].lockPtr);
+	bucketInfo[i].lockPtr = NULL;
     }
 
     TclpFreeAllocMutex(objLockPtr);

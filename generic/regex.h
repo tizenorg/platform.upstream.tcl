@@ -1,5 +1,8 @@
 #ifndef _REGEX_H_
 #define	_REGEX_H_	/* never again */
+
+#include "tclInt.h"
+
 /*
  * regular expressions
  *
@@ -104,8 +107,8 @@ extern "C" {
 /* interface types */
 #define	__REG_WIDE_T	Tcl_UniChar
 #define	__REG_REGOFF_T	long	/* not really right, but good enough... */
-#define	__REG_VOID_T	VOID
-#define	__REG_CONST	CONST
+#define	__REG_VOID_T	void
+#define	__REG_CONST	const
 /* names and declarations */
 #define	__REG_WIDE_COMPILE	TclReComp
 #define	__REG_WIDE_EXEC		TclReExec
@@ -319,3 +322,11 @@ MODULE_SCOPE size_t regerror(int, __REG_CONST regex_t *, char *, size_t);
 #endif
 
 #endif
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */
