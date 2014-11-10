@@ -1,5 +1,5 @@
 Name:           tcl
-Version:        8.6.0
+Version:        8.6.1
 Release:        0
 License:        TIZEN-TCL
 Summary:        The Tcl Programming Language
