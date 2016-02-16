@@ -16,6 +16,10 @@ Provides:       tclsh
 %define TCL_MINOR %(echo %{version} | cut -c1-3)
 Provides:       tclsh%{TCL_MINOR}
 
+%if %{!?license:1}
+%define license %doc
+%endif
+
 %description
 Tcl (Tool Command Language) is a very powerful but easy to learn
 dynamic programming language, suitable for a very wide range of uses,
@@ -67,7 +71,7 @@ install -D %{SOURCE3} -m 644 %{buildroot}%{_sysconfdir}/rpm/macros.tcl
 %files
 %manifest %{name}.manifest
 %defattr(-,root,root,755)
-%license  license.terms
+%license license.terms
 %doc %{_mandir}/man1/*
 %doc %{_mandir}/mann/*
 %{_bindir}/*
