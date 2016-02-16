@@ -29,7 +29,7 @@ http://wiki.tcl.tk .
 
 %package devel
 Summary:        Header Files and C API Documentation for Tcl
-Requires:       tcl = %{version}
+Requires:       tcl = %{version}-%{release}
 
 %description devel
 This package contains header files and documentation needed for writing
@@ -88,4 +88,3 @@ install -D %{SOURCE3} -m 644 %{buildroot}%{_sysconfdir}/rpm/macros.tcl
 %{_libdir}/pkgconfig/tcl.pc
 %{_libdir}/tclooConfig.sh
 
-%changelog
